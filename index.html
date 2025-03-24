@@ -37,7 +37,7 @@
             //inicializa neat con una red d 5 entradas y 1 salida
             neat = new neataptic.Neat(5, 1, {
                 mutationRate: 0.3, //probabilidad d mutación en cada generación
-                popSize: 20, //tamaño d la población de redes neuronales
+                popSize: 50, //tamaño d la población de redes neuronales
                 elitism: 5, //cantidad d individuos q se preservan sin cambios
                 mutationAmount: 2 //cantidad d mutaciones aplicadas a cada individuo
             });
@@ -85,17 +85,6 @@
                 nextGeneration();
             }
 
-            /*
-                Dibujamos la img de flappy en la posicion actual
-                image(img, x, y, ancho, alto)
-                - bird: img de flappy cargada en preload()
-                - 100: posicion en el eje x, fija en esta coordenada
-                - birdY: posicion en el eje y, q cambia debido a la gravedad y los saltos
-                - 40: ancho d la img en px
-                - 30: alto d la img en px
-            */
-            //image(bird, 100, birdY, 40, 30); 
-
             //aplica la gravedad a flappy
             velocity += gravity; //la velocidad aumenta con la gravedad
             birdY += velocity; //la posicion del flappy se actualiza con la velocidad
@@ -141,6 +130,16 @@
 
             //dibuja el pipe en la pantalla
             show() {
+            /*
+            Dibujamos la img de flappy en la posicion actual
+            image(img, x, y, ancho, alto)
+            - pipe: img de la pipe cargada en preload()
+            - x: posicion en el eje x, fija en esta coordenada
+            - this.top - pipeTop.height | this.bottom: posicion en el eje y,
+                q cambia debido a la gravedad y los saltos
+            - 50: ancho d la img en px
+            - pipe.height: alto d la img en px
+            */
                 image(pipeTop, this.x, this.top - pipeTop.height, 50, pipeTop.height);
                 image(pipeBottom, this.x, this.bottom, 50, pipeBottom.height);
             }
@@ -191,9 +190,21 @@
             }
 
             checkCollision() {
+                //si toca el borde superior o inferior
                 if(this.y > height || this.y < 0) {
                     this.dead = true;
-                    this.velocity = 0;
+                    return;
+                }
+
+                //verificamos la colisión con cada pipe
+                for(let pipe of pipes) {
+                    //comprueba si el flappy se encuentra en el espacio ocupado por las pipes (x, y)
+                    if( this.x + 40 > pipe.x && this.x < pipe.x +50 
+                        && (this.y < pipe.top || this.y + 30 > pipe.top)
+                    ) {
+                        this.dead = true;
+                        return;
+                    }
                 }
             }
 
