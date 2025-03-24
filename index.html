@@ -7,6 +7,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
 </head>
 <body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/neataptic/1.4.7/neataptic.js"></script>
     <script>
         let bird, bg, pipeTop, pipeBottom;
         let birdY = 250; //posición vertical inicial del pajaro
@@ -16,6 +17,8 @@
         let pipes = []; //array para almacenar las tuberias
         let pipeGap = 150; //espacio entre pipes
         let pipeSpeed = 2; //la velocidad d movimiento d las pipes
+        let lastPipeX; //ult posicion x de las pipes para calcular la siguiente
+        let neat; //instancia neat para el aprendizaje automatico
 
         //funcion preload() es propia de p5 js y se ejecuta antes d inciar el juego
         // para encargarse de cargar los assets
@@ -30,7 +33,16 @@
         //la función setup() se ejecuta una vez al inicio del juego
         function setup() {
             createCanvas(500, 600); //creamos el canvas
-            pipes.push(new Pipe());// añadimos el primer pipe
+
+            //inicializa neat con una red d 5 entradas y 1 salida
+            neat = new neataptic.Neat(5, 1, {
+                mutationRate: 0.3, //probabilidad d mutación en cada generación
+                popSize: 20, //tamaño d la población de redes neuronales
+                elitism: 5, //cantidad d individuos q se preservan sin cambios
+                mutationAmount: 2 //cantidad d mutaciones aplicadas a cada individuo
+            });
+
+            resetGame(); //reinicia el juego y configura los agentes
         }
 
         //la funcion draw se ejecuta en bucle para actualizar el juego constantemente
@@ -49,9 +61,28 @@
                 }
             }
 
-            //añadimos nuevos pipes cada x tiempo
+            //añadimos nuevos pipes cada x tiempo con un gap uniforme
             if(frameCount % 90 == 0) {
-                pipes.push(new Pipe()); //cada 90s se añaden nuevos pipes
+                //comprueba si hay o no pipes para utilizar un valor u otro
+                let lastX = pipes.length > 0 ? pipes[pipes.length - 1].x : width;
+                pipes.push(new Pipe(lastX)); //cada 90s se añaden nuevos pipes
+            }
+
+            //variable para verificar q todos los flappy estan muertooos
+            let allDead = true;
+            for(let genome of neat.population) {
+                let bird = genome.bird;
+
+                //comprueba la prop para ver si esta vivo
+                if(!bird.dead) {
+                    allDead = false;
+                    bird.update();//actualiza la posicion del flappy
+                    bird.show();//dibuja el flappy en la pantalla
+                }
+            }
+
+            if(allDead) {
+                nextGeneration();
             }
 
             /*
@@ -63,7 +94,7 @@
                 - 40: ancho d la img en px
                 - 30: alto d la img en px
             */
-            image(bird, 100, birdY, 40, 30); 
+            //image(bird, 100, birdY, 40, 30); 
 
             //aplica la gravedad a flappy
             velocity += gravity; //la velocidad aumenta con la gravedad
@@ -76,17 +107,30 @@
             }
         }
 
-        //detecta cuando s pulsa una tecla
-        function keyPressed() {
-            if (key == ' ') { //si presiona la barra espaciadora
-                velocity = jumpPower; //aplica el impulso simulando un salto
+        //funcion q reinicia el juego, reseteando las pipes y asignando nuevos flappys a la pop
+        function resetGame() {
+            pipes = []; //limpiamos array
+            lastPipeX = width; //reinicia la posicion d la ult pipe
+
+            for(let genome of neat.population) {
+                genome.dead = false;//reiniciamos el estado d vivo d los flappys
+                genome.score = 0;//reinicia puntuacion
+                genome.bird = new Bird(genome);//crea un nuevo flappy para cada individuo
             }
+
+            pipes.push(new Pipe(lastPipeX));//añade la pipe inicial
+        }
+
+        //funcion q genera una nueva gen con el algoritmo evolutivo
+        function nextGeneration() {
+            neat.evolve(); //evoluciona la pop usando neat
+            resetGame(); //reinicia el juego con la nueva generación
         }
 
         class Pipe {
-            constructor() {
-                this.x = width; //inicializa el pipe en el borde derecho d la pantalla
-                this.top = random(100, height - 300); //altura aleatoria para el pipe top
+            constructor(lastX) {
+                this.x = lastX + 200; //inicializa el pipe en el borde derecho d la pantalla
+                this.top = random(100, height - pipeGap - 100); //altura aleatoria para el pipe top
                 this.bottom = this.top + pipeGap; //calcula la posicion del pipe bottom
             }
 
@@ -109,7 +153,56 @@
 
         }
 
-        preload();
+        class Bird {
+            constructor(genome) {
+                this.x = 100; //posicion x inicial del flappy
+                this.y = 250; //posicion y inicial del flappy
+                this.velocity = velocity; //velocidad vertical inicial
+                this.gravity = gravity; //gravedad q afecta al flappy
+                this.jumpPower = jumpPower; //fuerza con la q el flappy salta
+                this.brain = genome; //asigna la red neuronal al flappy
+            }
+
+            update() {
+                this.velocity += this.gravity; //aplicamos la gravedad
+                this.y += this.velocity; //actualiza la posicion vertical
+
+                let inputs = this.getInputs(); //obtiene los datos de entrada para la IA
+                let output = this.brain.activate(inputs); //activa la red neuronal con los inputs
+
+                //si el output d la red neuronal es mayor a 0.5 el flappy salta
+                if(output[0] > 0.5) {
+                    this.velocity = this.jumpPower;
+                }
+
+                this.checkCollision(); //verifica si el flappy colisiona con los limites del canvas
+            }
+
+            getInputs() {
+                let closestPipe = pipes.find( p => p.x > this.x) || pipes[0];
+
+                return [
+                    this.y / height, //valor normalizado d la posicion vertical del flappy
+                    this.velocity / 10, //valor normalizado d la velocidad
+                    closestPipe.x / width, //valor normalizado de la pipe + cercana
+                    closestPipe.top / height, //valor normalizado de la posicion superior de la pipe
+                    closestPipe.bottom / height//valor normalizado de la posicion inferior de la pipe
+                ];
+            }
+
+            checkCollision() {
+                if(this.y > height || this.y < 0) {
+                    this.dead = true;
+                    this.velocity = 0;
+                }
+            }
+
+            //funcionq muestra el flappy en la pantalla
+            show() {
+                image(bird, this.x, this.y, 40, 30);
+            }
+        }
+
     </script>
 </body>
 </html>
