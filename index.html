@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy con p5 Js</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+</head>
+<body>
+    <script>
+        let bird, bg, pipeTop, pipeBottom;
+        let birdY = 250; //posición vertical inicial del pajaro
+        let velocity = 0; //velocidad del pajaro en cada fotograma
+        let gravity = 0.6; //fuerza d gravedad q afecta al pajaro
+        let jumpPower = -10; //fuerza del salto del pajaro
+        let pipes = []; //array para almacenar las tuberias
+        let pipeGap = 150; //espacio entre pipes
+        let pipeSpeed = 2; //la velocidad d movimiento d las pipes
+
+        //funcion preload() es propia de p5 js y se ejecuta antes d inciar el juego
+        // para encargarse de cargar los assets
+        function preload() {
+            //cargamos las imgs
+            bg = loadImage('background.png');
+            bird = loadImage('flappy.png');
+            pipeTop = loadImage('pipe_top.png');
+            pipeBottom = loadImage('pipe_bottom.png');
+        }
+
+        //la función setup() se ejecuta una vez al inicio del juego
+        function setup() {
+            createCanvas(500, 600); //creamos el canvas
+            pipes.push(new Pipe());// añadimos el primer pipe
+        }
+
+        //la funcion draw se ejecuta en bucle para actualizar el juego constantemente
+        function draw() {
+            background(bg); //dibujamos el fondo en cada fotograma
+            console.log('Pipes: ', pipes.length);
+
+            //Dibujamos y actualizamos los pipes
+            for( let i = pipes.length - 1; i>= 0; i--) {
+                pipes[i].move(); //movemos pipes a la izq
+                pipes[i].show(); //dibuja la pipe en la nueva posicion
+
+                //eliminamos los pipes q estan fuera d la pantalla
+                if(pipes[i].offScreen()) {
+                    pipes.splice(i, 1);
+                }
+            }
+
+            //añadimos nuevos pipes cada x tiempo
+            if(frameCount % 90 == 0) {
+                pipes.push(new Pipe()); //cada 90s se añaden nuevos pipes
+            }
+
+            /*
+                Dibujamos la img de flappy en la posicion actual
+                image(img, x, y, ancho, alto)
+                - bird: img de flappy cargada en preload()
+                - 100: posicion en el eje x, fija en esta coordenada
+                - birdY: posicion en el eje y, q cambia debido a la gravedad y los saltos
+                - 40: ancho d la img en px
+                - 30: alto d la img en px
+            */
+            image(bird, 100, birdY, 40, 30); 
+
+            //aplica la gravedad a flappy
+            velocity += gravity; //la velocidad aumenta con la gravedad
+            birdY += velocity; //la posicion del flappy se actualiza con la velocidad
+
+            //evita q el flappy caiga fuera d la pantalla
+            if (birdY > height - 30) {
+                birdY = height - 30; //coloca al flappy en el suelo
+                velocity = 0; //detiene su movimiento
+            }
+        }
+
+        //detecta cuando s pulsa una tecla
+        function keyPressed() {
+            if (key == ' ') { //si presiona la barra espaciadora
+                velocity = jumpPower; //aplica el impulso simulando un salto
+            }
+        }
+
+        class Pipe {
+            constructor() {
+                this.x = width; //inicializa el pipe en el borde derecho d la pantalla
+                this.top = random(100, height - 300); //altura aleatoria para el pipe top
+                this.bottom = this.top + pipeGap; //calcula la posicion del pipe bottom
+            }
+
+            //mueve el pipe a la izq
+            move() {
+                this.x -= pipeSpeed;
+            }
+
+            //dibuja el pipe en la pantalla
+            show() {
+                image(pipeTop, this.x, this.top - pipeTop.height, 50, pipeTop.height);
+                image(pipeBottom, this.x, this.bottom, 50, pipeBottom.height);
+            }
+
+            //verifica si el pipe se ha salido d la pantalla (al completo)
+            offScreen() {
+                // -50 xq es el aancho del pipe
+                return this.x < -50; //true si el pipe ha salido
+            }
+
+        }
+
+        preload();
+    </script>
+</body>
+</html>
