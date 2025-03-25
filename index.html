@@ -7,6 +7,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
 </head>
 <body>
+
+    <canvas id="chartCanvas" width="500" height="200"></canvas>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/neataptic/1.4.7/neataptic.js"></script>
     <script>
         let bird, bg, pipeTop, pipeBottom;
@@ -19,6 +22,11 @@
         let pipeSpeed = 2; //la velocidad d movimiento d las pipes
         let lastPipeX; //ult posicion x de las pipes para calcular la siguiente
         let neat; //instancia neat para el aprendizaje automatico
+        let bestScore = 0; //para almacenar valor mejor puntuacion
+        let currentMaxScore = 0; //almacena la mejor puntuacion actual (+ tiempo vivo)
+        let generation = 0; //almacena el num d generaciones
+        let bestBrain = null;
+        let scoreHistory = [];
 
         //funcion preload() es propia de p5 js y se ejecuta antes d inciar el juego
         // para encargarse de cargar los assets
@@ -42,11 +50,22 @@
                 mutationAmount: 2 //cantidad d mutaciones aplicadas a cada individuo
             });
 
+            //comprobamos si hay alguna red guardada
+            loadBestBrain();
+
             resetGame(); //reinicia el juego y configura los agentes
         }
 
-        //la funcion draw se ejecuta en bucle para actualizar el juego constantemente
+        /*  Refactor para acelerar el proceso  */
+        //la funcion draw llama x cada frame x (5) veces a updateGame
         function draw() {
+            for(let i = 0; i <5; i++) {
+                updateGame();
+            }
+        }
+
+        //la funcion updateGame se ejecuta en bucle para actualizar el juego constantemente
+        function updateGame() {
             background(bg); //dibujamos el fondo en cada fotograma
             console.log('Pipes: ', pipes.length);
 
@@ -62,6 +81,7 @@
             }
 
             //añadimos nuevos pipes cada x tiempo con un gap uniforme
+            //para asegurarnos q siempre existen pipes visibles en la pantalla
             if(frameCount % 90 == 0) {
                 //comprueba si hay o no pipes para utilizar un valor u otro
                 let lastX = pipes.length > 0 ? pipes[pipes.length - 1].x : width;
@@ -78,12 +98,21 @@
                     allDead = false;
                     bird.update();//actualiza la posicion del flappy
                     bird.show();//dibuja el flappy en la pantalla
+                    genome.score ++; //aumentamos la puntuacion cuanto + tiempo sobrevive
+
+                    //si pasa al maxScore, actualizamos el valor
+                    if(genome.score > currentMaxScore) {
+                        currentMaxScore = genome.score;
+                    }
                 }
             }
 
             if(allDead) {
                 nextGeneration();
             }
+
+            drawStats();
+            drawGraph();
 
             //aplica la gravedad a flappy
             velocity += gravity; //la velocidad aumenta con la gravedad
@@ -100,6 +129,7 @@
         function resetGame() {
             pipes = []; //limpiamos array
             lastPipeX = width; //reinicia la posicion d la ult pipe
+            currentMaxScore = 0;//reseteamos el valor
 
             for(let genome of neat.population) {
                 genome.dead = false;//reiniciamos el estado d vivo d los flappys
@@ -112,8 +142,70 @@
 
         //funcion q genera una nueva gen con el algoritmo evolutivo
         function nextGeneration() {
+            generation ++;
+
+            scoreHistory.push(currentMaxScore);
+
+            //si el valor max actual es mayor q el "record" almacenado
+            if(currentMaxScore > bestScore) {
+                bestScore = currentMaxScore;//actualizamos bestScore con el valor
+
+                //con reduce obtenemos un valor "total" de los elementos en un array (reducido)
+                //nos permite trabajar con un vector d datos y al final devolver 1 unico valor (puede ser num, string...)
+                //es programción funcional para evitar hacer un fori y asi recorrer el mejor valor y el valor del genome,
+                //si el genome es mayor almacena esa pop, si no lo es, deja la pop q ya tenia en best
+                //el objetivo es conseguir la pop con mejor puntuacion
+                bestBrain = neat.population.reduce( (best, genome) => genome.score > (best?.score || 0) ? genome : best, null );
+                console.log('Mostrando la mejor red: ', bestBrain);
+
+                saveBestBrain();
+            }
+
             neat.evolve(); //evoluciona la pop usando neat
             resetGame(); //reinicia el juego con la nueva generación
+        }
+
+        function saveBestBrain() {
+            console.log('Guardando la mejor red...');
+            localStorage.setItem('bestBrain', JSON.stringify(bestBrain.toJSON()));
+            localStorage.setItem('bestScore', bestScore);
+        }
+
+        function loadBestBrain() {
+            let savedBrain = localStorage.getItem('bestBrain');
+            let savedScore = localStorage.getItem('bestScore');
+
+            if(savedBrain) {
+                console.log('Cargando la mejor red...');
+                bestBrain = neataptic.Network.fromJSON(JSON.parse(savedBrain));
+                console.log('Mejor red cargada: ', bestBrain);
+                bestScore = parseInt(savedScore);
+            }
+        }
+
+
+        function drawStats() {
+            fill(255);
+            textSize(16);
+            text(`Generación: ${generation}`, 10, 20);
+            text(`Mejor puntuación: ${bestScore}`, 10, 40);
+            text(`Puntuación actual: ${currentMaxScore}`, 10, 60);
+        }
+
+        function drawGraph() {
+            let ctx = document.getElementById('chartCanvas').getContext('2d');
+            ctx.clearRect(0, 0, 500, 200);
+            ctx.beginPath();
+            ctx.moveTo(0, 200);
+
+            for(let i = 0; i < scoreHistory.length; i++) {
+                let x = (i / scoreHistory.length) * 500;
+                let y = 200 - (scoreHistory[i] / bestScore) * 200;
+                ctx.lineTo(x, y);
+            }
+
+            ctx.strokeStyle = 'red';
+            ctx.stroke();
         }
 
         class Pipe {
