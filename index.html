@@ -10,6 +10,8 @@
 
     <canvas id="chartCanvas" width="500" height="200"></canvas>
     <button onclick="resetAI()">Resetear IA</button>
+    <button onclick="downloadBestBrain()">Descargar modelo</button>
+    <input type="file" id="uploadBrain" accept=".json">
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/neataptic/1.4.7/neataptic.js"></script>
     <script>
@@ -189,6 +191,7 @@
             localStorage.removeItem('bestBrain');
             localStorage.removeItem('bestScore');
             bestScore = 0;
+            generation = 0;
             scoreHistory = [];
 
             neat = new neataptic.Neat(5, 1, {
@@ -233,14 +236,30 @@
         function downloadBestBrain() {
             //creamos un anchor con los datos y simulamos un click para hacer la descarga
             if(bestBrain) {
+                //Descarga con blob
+/*
                 //creamos un blob q contiene el modelo en formato json
                 let blob = new Blob([JSON.stringify(bestBrain.toJSON())], {type: 'application/json'});
-                let a = document.createElement('a');
+                let downloadAnchor = document.createElement('a');
                 a.href = URL.createObjectURL(blob); //creamos la url d acceso al blob
-                a.download = 'best_brain.json';
-                document.body.appendChild(a);//se añade al body d la web
-                a.click();//se simula el click
-                document.body.removeChild(a);//se retira del body
+*/
+
+                //descarga con string URI
+                //convertimos el modelo a json y lo codificamos como string uri
+                let dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(bestBrain.toJSON()));
+
+                console.log('dataStr', dataStr);
+                //creamos el anchor para descarga
+                let downloadAnchor = document.createElement('a');
+                downloadAnchor.href = dataStr;//asignamos el valor del uri
+
+                downloadAnchor.download = 'best_brain.json';
+
+                document.body.appendChild(downloadAnchor);//se añade al body d la web
+                downloadAnchor.click();//se simula el click
+                document.body.removeChild(downloadAnchor);//se retira del body
+            } else {
+                alert('No existe un modelo entrenado para descargar :(');
             }
         }
 
@@ -248,6 +267,33 @@
             event.preventDefault();
             downloadBestBrain();
         });
+
+        document.getElementById('uploadBrain').addEventListener('change', function (event) {
+            let file = event.target.files[0];
+
+            if(file) {
+                //como solo puede subir 1 archivo, siempre obtenemos el elemento 0
+                let file = event.target.files[0];
+
+                if(file) {
+                    let reader = new FileReader();
+                    //manejador para cuando el reader lea los datos
+                    reader.onload = function (e) {
+                        let json = JSON.parse(e.target.result);
+                        console.log('Result:', json);
+
+                        //cargamos el modelo / red neuronal desde el json y lo establecemos en bestBrain
+                        bestBrain = neataptic.Network.fromJSON(json);
+
+                        bestScore = 0;
+                        alert('Modelo cargado con éxito!');
+                    };
+
+                    //leemos el archivo con el manejador ya establecido
+                    reader.readAsText(file);
+                }
+            }
+        })
 
         class Pipe {
             constructor(lastX) {
