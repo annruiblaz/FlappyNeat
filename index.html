@@ -9,6 +9,7 @@
 <body>
 
     <canvas id="chartCanvas" width="500" height="200"></canvas>
+    <button onclick="resetAI()">Resetear IA</button>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/neataptic/1.4.7/neataptic.js"></script>
     <script>
@@ -183,13 +184,34 @@
             }
         }
 
+        //funcion q elimina todos los valores almacenados (y los de localstorage)
+        function resetAI() {
+            localStorage.removeItem('bestBrain');
+            localStorage.removeItem('bestScore');
+            bestScore = 0;
+            scoreHistory = [];
+
+            neat = new neataptic.Neat(5, 1, {
+                mutationRate: 0.3,
+                popSize: 50,
+                elitism: 5,
+                mutationAmount: 2
+            });
+
+            resetGame();
+        }
 
         function drawStats() {
+            //con filter, devolvemos un vector q contiene los elementos q cumplen la condicion
+            //en este caso filter devuelve los flappys q su estado de dead es false
+            //pero en aliveBirds unicamente almacenamos el num total (a modo d  contador, no nos interesan los flappys y sus props)
+            let aliveBirds = neat.population.filter(genome => !genome.bird.dead).length;
             fill(255);
             textSize(16);
             text(`Generación: ${generation}`, 10, 20);
             text(`Mejor puntuación: ${bestScore}`, 10, 40);
             text(`Puntuación actual: ${currentMaxScore}`, 10, 60);
+            text(`Flappys vivos: ${aliveBirds}`, 10, 80);
         }
 
         function drawGraph() {
@@ -207,6 +229,25 @@
             ctx.strokeStyle = 'red';
             ctx.stroke();
         }
+
+        function downloadBestBrain() {
+            //creamos un anchor con los datos y simulamos un click para hacer la descarga
+            if(bestBrain) {
+                //creamos un blob q contiene el modelo en formato json
+                let blob = new Blob([JSON.stringify(bestBrain.toJSON())], {type: 'application/json'});
+                let a = document.createElement('a');
+                a.href = URL.createObjectURL(blob); //creamos la url d acceso al blob
+                a.download = 'best_brain.json';
+                document.body.appendChild(a);//se añade al body d la web
+                a.click();//se simula el click
+                document.body.removeChild(a);//se retira del body
+            }
+        }
+
+        window.addEventListener('beforeunload', (event) => {
+            event.preventDefault();
+            downloadBestBrain();
+        });
 
         class Pipe {
             constructor(lastX) {
